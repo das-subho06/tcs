@@ -51,7 +51,7 @@ Extract structured action items strictly following the instructions.`;
 
     try {
       const model = this.genAI.getGenerativeModel({
-        model: config.gemini.model || 'gemini-1.5-flash',
+        model: config.gemini.model || 'gemini-3.8-flash',
         systemInstruction: SYSTEM_PROMPT,
         generationConfig: {
           responseMimeType: 'application/json',
@@ -90,9 +90,10 @@ Extract structured action items strictly following the instructions.`;
       const validated = ActionItemsResponseSchema.parse(parsed);
       return validated;
     } catch (err: any) {
-      if (attempt === 1) {
-        console.warn('Gemini extraction failed or returned invalid JSON, retrying once...', err?.message);
-        return this.processChunkWithRetry(chunk, meetingDate, speakerNames, 2);
+      if (attempt <= 2) {
+        console.warn(`Gemini extraction attempt ${attempt} failed (${err?.message}), retrying in 1.5s...`);
+        await new Promise(r => setTimeout(r, 1500));
+        return this.processChunkWithRetry(chunk, meetingDate, speakerNames, attempt + 1);
       }
       console.error('Gemini extraction failed on retry, using fallback extractor', err);
       return this.fallbackExtraction({ transcript: chunk, meetingDate, speakerNames });
@@ -136,7 +137,7 @@ Extract structured action items strictly following the instructions.`;
   }
 
   private fallbackExtraction(input: StructuringInput): ActionItemDTO[] {
-    // Intelligent fallback heuristic when Gemini API key is not yet set
+    // Intelligent fallback heuristic when Gemini API encounters temporary rate limits
     const items: ActionItemDTO[] = [];
     const meetingDateStr = input.meetingDate.toISOString().split('T')[0];
 
@@ -144,20 +145,24 @@ Extract structured action items strictly following the instructions.`;
       const seg = input.transcript[i];
       const text = seg.text;
 
-      // Check request patterns: "Riya, can you send the updated pricing sheet by Friday?"
+      // 1. Direct "Please do X by Y" or "Kindly do X by Y"
+      const directPleaseMatch = text.match(/(?:please|kindly)\s+([^.?!]+)/i);
+      // 2. "We have to / need to do X by Y"
+      const haveToMatch = text.match(/(?:we have to|need to|must|should)\s+([^.?!]+)/i);
+      // 3. Directed request: "Riya, can you send the pricing sheet by Friday?"
       const canYouMatch = text.match(/([A-Z][a-z]+)[,:]?\s*(?:can you|please|could you)\s+([^.?!]+)/i);
-      if (canYouMatch) {
-        const targetName = canYouMatch[1];
-        const rawTask = canYouMatch[2].trim();
-        const dueMatch = rawTask.match(/\bby\s+([A-Za-z0-9]+)/i);
-        const dueRaw = dueMatch ? dueMatch[1] : null;
 
-        // Clean action phrase
-        const action = rawTask.replace(/\bby\s+([A-Za-z0-9]+)/i, '').trim();
+      const matchedTask = directPleaseMatch?.[1] || haveToMatch?.[1] || canYouMatch?.[2];
+
+      if (matchedTask) {
+        const rawTask = matchedTask.trim();
+        const dueMatch = rawTask.match(/\bby\s+([A-Za-z0-9 ]+?)(?:\.|$)/i);
+        const dueRaw = dueMatch ? dueMatch[1].trim() : null;
+        const action = rawTask.replace(/\bby\s+([A-Za-z0-9 ]+?)(?:\.|$)/i, '').trim();
 
         items.push({
           action: action.charAt(0).toUpperCase() + action.slice(1),
-          owner: input.speakerNames.includes(targetName) ? targetName : (input.speakerNames[0] || 'Unassigned'),
+          owner: seg.speaker_name && seg.speaker_name !== 'Unknown' ? seg.speaker_name : (input.speakerNames[0] || 'Unassigned'),
           due_raw: dueRaw,
           due_date: dueRaw ? `${meetingDateStr}` : null,
           assigned_by: seg.speaker_name || 'Unassigned',
@@ -165,6 +170,7 @@ Extract structured action items strictly following the instructions.`;
           timestamp: seg.start,
           confidence: 0.85,
         });
+        continue;
       }
 
       // Check commit patterns: "Yes, I'll do that" / "I will prepare the deployment plan by Monday"
