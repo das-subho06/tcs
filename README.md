@@ -152,15 +152,23 @@ Pyannote audio models require accepting their user conditions on Hugging Face:
    NOTION_REDIRECT_URI="http://localhost:4000/api/integrations/notion/callback"
    ```
 
-### D. Speech-to-Text Configuration (`STT_PROVIDER` & `STT_API_KEY`)
-1. By default, `STT_PROVIDER=mock` is active for testing without external costs.
-2. To use OpenAI Whisper:
-   - Get an OpenAI API Key from [OpenAI Platform](https://platform.openai.com/api-keys).
-   - In `.env`, set:
-     ```env
-     STT_PROVIDER=whisper
-     STT_API_KEY="sk-..."
-     ```
+### D. All-in-One Cloud Diarization & Speech-to-Text (Deepgram Nova-2) - *Recommended*
+To eliminate running PyTorch, torchaudio, and Python containers on your local machine:
+1. Sign up at [Deepgram Console](https://console.deepgram.com/) ($200 free credits provided on signup).
+2. Create an API Key under **API Keys** → **Create a Key**.
+3. In your `.env` file, set:
+   ```env
+   DIARIZATION_PROVIDER=deepgram
+   DEEPGRAM_API_KEY="your-deepgram-api-key"
+   DEEPGRAM_MODEL="nova-2"
+   STT_PROVIDER=deepgram
+   ```
+*This performs both speaker diarization and word-level speech-to-text simultaneously via a single fast cloud API call in ~1–2 seconds, requiring zero local ML packages.*
+
+### E. Speech-to-Text (Whisper or Mock)
+If you prefer not to use Deepgram for STT:
+1. `STT_PROVIDER=mock`: Default offline mock with realistic timestamps.
+2. `STT_PROVIDER=whisper`: Set `STT_API_KEY="sk-..."` with your OpenAI key.
 
 ---
 

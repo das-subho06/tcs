@@ -50,8 +50,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-key-for-development-change-in-prod-12345678}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       - STORAGE_DRIVER=local
-      - STORAGE_LOCAL_DIR=/app/uploads
-      - DIARIZATION_SERVICE_URL=http://diarization:8000
+      - DIARIZATION_PROVIDER=${DIARIZATION_PROVIDER:-deepgram}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-2}
+      - DIARIZATION_SERVICE_URL=${DIARIZATION_SERVICE_URL:-http://diarization:8000}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - NOTION_CLIENT_ID=${NOTION_CLIENT_ID:-}
       - NOTION_CLIENT_SECRET=${NOTION_CLIENT_SECRET:-}
@@ -80,7 +82,10 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       - STORAGE_DRIVER=local
       - STORAGE_LOCAL_DIR=/app/uploads
-      - DIARIZATION_SERVICE_URL=http://diarization:8000
+      - DIARIZATION_PROVIDER=${DIARIZATION_PROVIDER:-deepgram}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - DEEPGRAM_MODEL=${DEEPGRAM_MODEL:-nova-2}
+      - DIARIZATION_SERVICE_URL=${DIARIZATION_SERVICE_URL:-http://diarization:8000}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
       - audio_uploads:/app/uploads

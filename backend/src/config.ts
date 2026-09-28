@@ -21,12 +21,18 @@ export const config = {
   },
 
   diarization: {
+    provider: (process.env.DIARIZATION_PROVIDER || 'deepgram') as 'deepgram' | 'pyannote' | 'mock',
     serviceUrl: process.env.DIARIZATION_SERVICE_URL || 'http://localhost:8000',
     hfToken: process.env.HF_TOKEN || '',
   },
 
+  deepgram: {
+    apiKey: process.env.DEEPGRAM_API_KEY || '',
+    model: process.env.DEEPGRAM_MODEL || 'nova-2',
+  },
+
   stt: {
-    provider: (process.env.STT_PROVIDER || 'mock') as 'mock' | 'whisper' | 'cloud',
+    provider: (process.env.STT_PROVIDER || 'deepgram') as 'deepgram' | 'mock' | 'whisper' | 'cloud',
     apiKey: process.env.STT_API_KEY || '',
   },
 

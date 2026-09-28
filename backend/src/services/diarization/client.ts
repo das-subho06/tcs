@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { config } from '../../config';
+import { deepgramService } from '../stt/deepgramService';
 
 export interface DiarizationTurn {
   speaker_label: string;
@@ -19,6 +20,17 @@ export class DiarizationClient {
     minSpeakers?: number,
     maxSpeakers?: number
   ): Promise<DiarizationTurn[]> {
+    // 1. All-in-one Cloud option (Deepgram Nova-2)
+    if (config.diarization.provider === 'deepgram' || config.deepgram.apiKey) {
+      try {
+        const cloudResult = await deepgramService.transcribeAndDiarize(audioFilePath);
+        return cloudResult.turns;
+      } catch (err: any) {
+        console.warn(`Deepgram cloud diarization failed: ${err.message}, falling back to Pyannote/mock`);
+      }
+    }
+
+    // 2. Pyannote microservice (FastAPI container or remote endpoint)
     try {
       const formData = new FormData();
       const fileBuffer = await fs.promises.readFile(audioFilePath);
