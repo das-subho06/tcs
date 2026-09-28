@@ -92,6 +92,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, onOpenSe
     }
   };
 
+  const [tokenCopied, setTokenCopied] = useState(false);
+
+  const handleCopyToken = () => {
+    const token = localStorage.getItem('token') || '';
+    if (!token) {
+      alert('No auth token found in session.');
+      return;
+    }
+    navigator.clipboard.writeText(token);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2500);
+  };
+
   return (
     <div style={{ maxWidth: 960, margin: '30px auto', padding: '0 16px' }}>
       {/* Header */}
@@ -100,7 +113,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, onOpenSe
           <h1 style={{ margin: 0, fontSize: 22, color: '#f8fafc' }}>Meeting Action Items Dashboard</h1>
           <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>Signed in as: <strong>{user.email}</strong></div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={handleCopyToken}
+            style={{
+              fontSize: 12,
+              background: tokenCopied ? '#059669' : '#3b82f6',
+              border: 'none',
+              color: '#fff',
+              padding: '6px 12px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            {tokenCopied ? '✓ Token Copied!' : '🔑 Copy Extension Token'}
+          </button>
           {notionConnected ? (
             <span style={{ fontSize: 12, background: '#065f46', color: '#6ee7b7', padding: '4px 8px', borderRadius: 4 }}>
               ✓ Notion Connected ({notionWorkspace || 'Workspace'})

@@ -1,3 +1,5 @@
+const API_URL = 'http://localhost:4000';
+
 let timerInterval = null;
 let startTime = null;
 
@@ -8,15 +10,28 @@ const statusText = document.getElementById('statusText');
 const timerEl = document.getElementById('timer');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+
+const loggedInView = document.getElementById('loggedInView');
+const loginFormView = document.getElementById('loginFormView');
+const userEmailEl = document.getElementById('userEmail');
+const logoutBtn = document.getElementById('logoutBtn');
+
+const emailInput = document.getElementById('emailInput');
+const passwordInput = document.getElementById('passwordInput');
+const loginBtn = document.getElementById('loginBtn');
 const tokenInput = document.getElementById('tokenInput');
 
-// 1. Check one-time consent
-chrome.storage.local.get(['hasConsented', 'authToken', 'recordingStartTime'], (res) => {
+let currentToken = '';
+
+// 1. Initial State Check
+chrome.storage.local.get(['hasConsented', 'authToken', 'userEmail', 'recordingStartTime'], async (res) => {
   if (!res.hasConsented) {
     consentBanner.style.display = 'block';
   }
   if (res.authToken) {
+    currentToken = res.authToken;
     tokenInput.value = res.authToken;
+    verifyToken(res.authToken, res.userEmail);
   }
   if (res.recordingStartTime) {
     startTimer(res.recordingStartTime);
@@ -24,17 +39,92 @@ chrome.storage.local.get(['hasConsented', 'authToken', 'recordingStartTime'], (r
   }
 });
 
+// Consent acceptance
 consentBtn.addEventListener('click', () => {
   chrome.storage.local.set({ hasConsented: true }, () => {
     consentBanner.style.display = 'none';
   });
 });
 
-tokenInput.addEventListener('change', () => {
-  chrome.storage.local.set({ authToken: tokenInput.value.trim() });
+// Verify token with backend
+async function verifyToken(token, cachedEmail) {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentToken = token;
+      userEmailEl.innerText = data.user?.email || cachedEmail || 'Authenticated';
+      loggedInView.style.display = 'block';
+      loginFormView.style.display = 'none';
+      chrome.storage.local.set({ authToken: token, userEmail: data.user?.email });
+      return true;
+    }
+  } catch (e) {
+    console.warn('Token verify error:', e);
+  }
+  loggedInView.style.display = 'none';
+  loginFormView.style.display = 'block';
+  return false;
+}
+
+// Direct Login inside extension
+loginBtn.addEventListener('click', async () => {
+  const email = emailInput.value.trim();
+  const password = passwordInput.value.trim();
+  if (!email || !password) {
+    alert('Please enter both email and password.');
+    return;
+  }
+
+  loginBtn.innerText = 'Signing in...';
+  loginBtn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Login failed');
+    }
+
+    currentToken = data.token;
+    tokenInput.value = data.token;
+    chrome.storage.local.set({ authToken: data.token, userEmail: data.user.email });
+    verifyToken(data.token, data.user.email);
+  } catch (err) {
+    alert(`Login failed: ${err.message}`);
+  } finally {
+    loginBtn.innerText = 'Sign In to Extension';
+    loginBtn.disabled = false;
+  }
 });
 
-// 2. Poll initial background status
+// Logout / Change Token in extension
+logoutBtn.addEventListener('click', () => {
+  currentToken = '';
+  chrome.storage.local.remove(['authToken', 'userEmail']);
+  tokenInput.value = '';
+  loggedInView.style.display = 'none';
+  loginFormView.style.display = 'block';
+});
+
+// Paste Token handler
+tokenInput.addEventListener('change', () => {
+  const val = tokenInput.value.trim();
+  if (val) {
+    currentToken = val;
+    chrome.storage.local.set({ authToken: val });
+    verifyToken(val);
+  }
+});
+
+// Poll background status
 chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (res) => {
   if (res && res.recording) {
     setRecordingUI(true);
@@ -77,15 +167,13 @@ function setRecordingUI(isRecording) {
   }
 }
 
-// 3. Start Button Click
+// Start Recording
 startBtn.addEventListener('click', async () => {
-  const token = tokenInput.value.trim();
-  if (!token) {
-    alert('Please enter a valid Auth Token first (or log in via the app tab).');
+  if (!currentToken) {
+    alert('Please sign in or paste an auth token first.');
     return;
   }
 
-  // Get active tab
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) {
     alert('No active tab found to record.');
@@ -96,7 +184,7 @@ startBtn.addEventListener('click', async () => {
     {
       type: 'START',
       tabId: tab.id,
-      token,
+      token: currentToken,
     },
     (response) => {
       if (response && response.error) {
@@ -109,11 +197,11 @@ startBtn.addEventListener('click', async () => {
   );
 });
 
-// 4. Stop Button Click
+// Stop Recording
 stopBtn.addEventListener('click', () => {
   stopTimer();
   setRecordingUI(false);
-  chrome.runtime.sendMessage({ type: 'STOP' }, (response) => {
-    window.close(); // Close extension popup; handoff opens in new tab
+  chrome.runtime.sendMessage({ type: 'STOP' }, () => {
+    window.close();
   });
 });
