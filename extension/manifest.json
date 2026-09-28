@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Meeting to Action Items Recorder",
+  "version": "1.0.0",
+  "description": "Records meeting audio and tab audio separately, extracts action items with Gemini",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "tabs",
+    "action"
+  ],
+  "host_permissions": [
+    "http://localhost:4000/*",
+    "http://127.0.0.1:4000/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Meeting to Action Items"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  sessions     Session[]
+  integrations Integration[]
+  handoffCodes HandoffCode[]
+
+  @@map("users")
+}
+
+enum SessionStatus {
+  RECORDING
+  UPLOADING
+  UPLOADED
+  DIARIZING
+  AWAITING_SPEAKER_NAMES
+  TRANSCRIBING
+  STRUCTURING
+  REVIEW
+  EXPORTED
+  FAILED
+}
+
+enum SessionSource {
+  extension
+  upload_audio
+  upload_transcript
+}
+
+model Session {
+  id           String              @id @default(uuid())
+  userId       String              @map("user_id")
+  source       SessionSource       @default(extension)
+  status       SessionStatus       @default(RECORDING)
+  meetingDate  DateTime            @default(now()) @map("meeting_date")
+  title        String              @default("Untitled Meeting")
+  partial      Boolean             @default(false)
+  error        String?
+  retryableStep String?            @map("retryable_step")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audioTracks  AudioTrack[]
+  audioChunks  AudioChunk[]
+  speakers     Speaker[]
+  transcript   TranscriptSegment[]
+  actionItems  ActionItem[]
+  exports      Export[]
+  handoffCodes HandoffCode[]
+
+  @@map("sessions")
+}
+
+model AudioTrack {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  track     String   // "tab" or "mic" or "full"
+  path      String
+  duration  Float?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, track])
+  @@map("audio_tracks")
+}
+
+model AudioChunk {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  track       String   // "tab" or "mic"
+  sequenceNum Int      @map("sequence_num")
+  path        String
+  receivedAt  DateTime @default(now()) @map("received_at")
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, track, sequenceNum])
+  @@map("audio_chunks")
+}
+
+model Speaker {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  label       String   // e.g. "SPEAKER_00", "You"
+  displayName String   @map("display_name")
+  clipPaths   String   @default("[]") @map("clip_paths") // JSON array of clip file URLs/paths
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  transcriptSegments TranscriptSegment[]
+
+  @@unique([sessionId, label])
+  @@map("speakers")
+}
+
+model TranscriptSegment {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  start       Float
+  end         Float
+  speakerId   String?  @map("speaker_id")
+  speakerName String   @map("speaker_name")
+  text        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  speaker     Speaker? @relation(fields: [speakerId], references: [id], onDelete: SetNull)
+
+  @@map("transcript_segments")
+}
+
+model ActionItem {
+  id          String    @id @default(uuid())
+  sessionId   String    @map("session_id")
+  action      String
+  owner       String    @default("Unassigned")
+  dueRaw      String?   @map("due_raw")
+  dueDate     DateTime? @map("due_date")
+  assignedBy  String    @default("Unassigned") @map("assigned_by")
+  sourceQuote String    @map("source_quote")
+  timestamp   Float     @default(0)
+  confidence  Float     @default(1.0)
+  done        Boolean   @default(false)
+  edited      Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("action_items")
+}
+
+model Export {
+  id         String   @id @default(uuid())
+  sessionId  String   @map("session_id")
+  type       String   // "excel", "notion"
+  externalId String?  @map("external_id") // e.g. Notion page ID or file download ID
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("exports")
+}
+
+model Integration {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  provider       String   // "notion"
+  encryptedToken String   @map("encrypted_token")
+  workspaceId    String?  @map("workspace_id")
+  workspaceName  String?  @map("workspace_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("integrations")
+}
+
+model HandoffCode {
+  id        String    @id @default(uuid())
+  codeHash  String    @unique @map("code_hash")
+  userId    String    @map("user_id")
+  sessionId String    @map("session_id")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session   Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("handoff_codes")
+}

@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: meeting_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: meeting_actions
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: meeting_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  diarization:
+    build:
+      context: ./diarization-service
+      dockerfile: Dockerfile
+    container_name: meeting_diarization
+    restart: always
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+    ports:
+      - "8000:8000"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meeting_api
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - APP_URL=${APP_URL:-http://localhost:3000}
+      - API_URL=${API_URL:-http://localhost:4000}
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/meeting_actions?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-key-for-development-change-in-prod-12345678}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - STORAGE_DRIVER=local
+      - STORAGE_LOCAL_DIR=/app/uploads
+      - DIARIZATION_SERVICE_URL=http://diarization:8000
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - NOTION_CLIENT_ID=${NOTION_CLIENT_ID:-}
+      - NOTION_CLIENT_SECRET=${NOTION_CLIENT_SECRET:-}
+      - NOTION_REDIRECT_URI=${NOTION_REDIRECT_URI:-http://localhost:4000/api/integrations/notion/callback}
+    ports:
+      - "4000:4000"
+    volumes:
+      - audio_uploads:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+      - diarization
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meeting_worker
+    restart: always
+    command: ["npm", "run", "worker"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/meeting_actions?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-key-for-development-change-in-prod-12345678}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - STORAGE_DRIVER=local
+      - STORAGE_LOCAL_DIR=/app/uploads
+      - DIARIZATION_SERVICE_URL=http://diarization:8000
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - audio_uploads:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+      - diarization
+
+volumes:
+  postgres_data:
+  redis_data:
+  audio_uploads:
