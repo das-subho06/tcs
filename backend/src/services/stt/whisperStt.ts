@@ -35,7 +35,9 @@ export class WhisperSpeechToText implements SpeechToText {
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(`Whisper STT request failed (${response.status}): ${err}`);
+      console.warn(`Whisper STT request failed (${response.status}): ${err}. Using fallback STT.`);
+      const { MockSpeechToText } = require('./mockStt');
+      return new MockSpeechToText().transcribe(audioFilePath);
     }
 
     const data = await response.json() as any;

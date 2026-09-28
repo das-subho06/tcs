@@ -17,9 +17,11 @@ class DeepgramSpeechToText implements SpeechToText {
 
 let sttInstance: SpeechToText;
 
-if (config.stt.provider === 'deepgram' || config.deepgram.apiKey || config.diarization.provider === 'deepgram') {
+if (config.stt.provider === 'whisper' && config.stt.apiKey) {
+  sttInstance = new WhisperSpeechToText();
+} else if ((config.stt.provider === 'deepgram' || config.diarization.provider === 'deepgram') && config.deepgram.apiKey) {
   sttInstance = new DeepgramSpeechToText();
-} else if (config.stt.provider === 'whisper' && config.stt.apiKey) {
+} else if (config.stt.apiKey) {
   sttInstance = new WhisperSpeechToText();
 } else {
   sttInstance = new MockSpeechToText();
